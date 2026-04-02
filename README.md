@@ -411,4 +411,4 @@ Ready to use TaskTrackr? Follow these quick steps:
 
 **Built with ❤️ and ☕ for Web Technologies Mini Project**
 
-*Last Updated: March 23, 2026*
+*Last Updated: April 2, 2026*
