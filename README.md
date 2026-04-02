@@ -91,7 +91,7 @@ Before you begin, ensure you have the following installed:
   - Verify installation: `node --version` and `npm --version`
 - **Git** (optional, for cloning) - [Download from git-scm.com](https://git-scm.com/)
 
-> ⚠️ **No XAMPP, PHP, or MySQL needed anymore!** The new tech stack uses Node.js and SQLite.
+
 
 ### Step 1: Clone or Download the Project
 
