@@ -32,7 +32,7 @@ function App() {
     // All routing only works inside this wrapper.
     // Hint: <Router> ... your JSX ... </Router>
 
-
+    <Router>
     <div className="min-h-screen bg-sageMist flex flex-col">
       <Toaster position="top-right" />
 
@@ -40,16 +40,17 @@ function App() {
       {/* <Routes> looks at the current URL and renders only the matching <Route> */}
       {/* Think of it like a switch statement for URLs */}
       {/* Hint: wrap the two <Route> lines below inside <Routes> ... </Routes> */}
+      <Routes>
 
         {/* TODO R3: Add a <Route> for the /login path */}
         {/* If the user is NOT logged in → show <LoginPage /> */}
         {/* If they ARE logged in → redirect to /tasks using <Navigate to="/tasks" /> */}
         {/* Hint: <Route path="/login" element={condition ? <A /> : <B />} /> */}
-
+        <Route path="login" element={isAuthenticated ? <Navigate to="/tasks" /> : <LoginPage />} />
         {/* TODO R4: Add a <Route> for /register — same pattern as R3 above */}
         {/* If NOT logged in → show <RegisterPage /> */}
         {/* If already logged in → redirect to /tasks */}
-
+        <Route path="register" element={isAuthenticated ? <Navigate to="/tasks" /> : <RegisterPage/>} />
         {/* ── PRE-WRITTEN: Protected area — Do not modify ── */}
         {/* This catches all other URLs and checks if the user is logged in */}
         {/* If not logged in, it redirects to /login automatically */}
@@ -65,7 +66,7 @@ function App() {
                   {/* TODO R5: Add a <Route> for /tasks that renders <TasksPage /> */}
                   {/* Wrap TasksPage inside: <div className="flex-1 px-6 py-0 overflow-y-auto"> */}
                   {/* Hint: <Route path="/tasks" element={<div ...><TasksPage /></div>} /> */}
-
+                  <Route path="/tasks" element={<div className="flex-1 px-6 py-0 overflow-y-auto"> <TasksPage /> </div>}/>
                   {/* ── PRE-WRITTEN: Focus and History routes ── */}
                   <Route path="/focus" element={<div className="flex-1 px-6 py-0 overflow-hidden"><FocusPage /></div>} />
                   <Route path="/history" element={<div className="flex-1 px-6 py-0 overflow-y-auto"><HistoryPage /></div>} />
@@ -77,9 +78,10 @@ function App() {
             )
           }
         />
+      </Routes>
 
     </div>
-
+    </Router>
   );
 }
 

@@ -93,7 +93,8 @@ const TaskBoard = ({ tasks, onTaskCreated, onTaskUpdated, onTaskDeleted, onTaskM
       // Then call onTaskDeleted(taskId) to remove it from the UI
       // Hint: await axiosInstance.delete(`/tasks/${taskId}`);
       //       onTaskDeleted(taskId);
-
+      await axiosInstance.delete(`/tasks/${taskId}`);
+      onTaskDeleted(taskId);
     } catch (error) {
       toast.error('Failed to delete task');
     }

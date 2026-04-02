@@ -9,18 +9,18 @@ const TasksPage = () => {
   // TODO 1: Declare a state variable called 'tasks'
   // It should start as an empty array []
   // Hint: const [tasks, setTasks] = useState([]);
-
+  const [tasks, setTasks] = useState([]);
 
   // TODO 2: Declare a state variable called 'loading'
   // It should start as true — the page is loading when it first opens
   // Hint: const [loading, setLoading] = useState(true);
-
+  const [loading, setLoading] = useState(true);
 
   // TODO 3: Call fetchTasks() when the page first loads
   // useEffect runs code after the component renders
   // The empty [] means "run this only once, on first load"
   // Hint: useEffect(() => { fetchTasks(); }, []);
-
+  useEffect(() => { fetchTasks(); }, []);
 
   const fetchTasks = async () => {
     try {
@@ -34,12 +34,14 @@ const TasksPage = () => {
       // Use axiosInstance to make a GET request to '/tasks?user_id={user.id}'
       // Store the result in a variable called 'response'
       // Hint: const response = await axiosInstance.get(`/tasks?user_id=${user.id}`);
+      const response = await axiosInstance.get(`/tasks?user_id=${user.id}`);
 
 
       // TODO 5: Update the tasks state with the data you just fetched
       // Check if response.data.status === 'success'
       // If yes, call setTasks() with response.data.data
       // Hint: if (response.data.status === 'success') { setTasks(response.data.data); }
+      if (response.data.status === 'success') { setTasks(response.data.data); }
 
 
     } catch (error) {
@@ -48,6 +50,7 @@ const TasksPage = () => {
       // TODO 6: Stop the loading spinner
       // Set loading to false — this runs whether the request succeeded or failed
       // Hint: setLoading(false);
+      setLoading(false);
 
     }
   };
@@ -57,7 +60,7 @@ const TasksPage = () => {
     // Important: you must create a NEW array — never mutate state directly
     // The spread operator ... copies all existing items, then adds the new one
     // Hint: setTasks([...tasks, newTask]);
-
+    setTasks([...tasks, newTask]);
     toast.success('Task created successfully!');
   };
 
@@ -65,7 +68,7 @@ const TasksPage = () => {
     // TODO 8: Replace the old version of this task with the updated one
     // Use tasks.map() — if the task id matches, return updatedTask, otherwise return the original
     // Hint: setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
-
+    setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
     toast.success('Task updated successfully!');
   };
 
@@ -73,7 +76,7 @@ const TasksPage = () => {
     // TODO 9: Remove this task from the array
     // Use tasks.filter() — keep only tasks whose id does NOT match taskId
     // Hint: setTasks(tasks.filter(t => t.id !== taskId));
-
+    setTasks(tasks.filter(t => t.id !== taskId));
     toast.success('Task deleted successfully!');
   };
 
