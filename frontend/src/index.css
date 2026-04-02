@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Custom select dropdown styling for task selector */
+select[size] {
+  height: auto !important;
+}
+
+/* Hide scrollbar for timer container but keep scrolling functionality */
+.timer-container::-webkit-scrollbar {
+  display: none;
+}
+
+.timer-container {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
