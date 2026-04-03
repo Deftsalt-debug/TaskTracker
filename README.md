@@ -297,7 +297,7 @@ http://localhost:8080/api
 
 ## 🎓 Learning Outcomes & Architecture
 
-### What You'll Learn
+### What I've Learnt
 
 This project demonstrates proficiency in:
 
@@ -371,27 +371,10 @@ Potential features for version 2.0:
 
 ## 📄 License
 
-This project is created for **educational purposes** as part of 5th Semester Web Technologies coursework.
+This project is created for **educational purposes** as part of 2nd Semester Web Technologies workshop.
 
 ---
 
-## 👨‍💻 Contributors
-
-**Developed by:** 5th Semester Web Technologies Students
-
----
-
-## 🙏 Acknowledgments
-
-- **React Team** - For the powerful UI framework
-- **Node.js & Express** - For server-side runtime and framework
-- **Tailwind CSS** - For utility-first CSS styling
-- **Framer Motion** - For stunning animations
-- **@dnd-kit** - For accessible drag-and-drop
-- **bcryptjs** - For secure password hashing
-- **React Icons** - For beautiful icon set
-
----
 
 ---
 
