@@ -17,3 +17,9 @@ Checks on Node 26.10.0:
 - The frontend's existing test command found **no tests**. It is not counted as test coverage.
 
 Limits: no browser drag-and-drop or full login/history flow was exercised. Existing Pomodoro timing/history behavior still needs its own pass. This remains a local workshop app: the API does not enforce user authorization on task IDs, so these fixes do not make it suitable for public multi-user hosting. The build still reports an old Browserslist dataset.
+
+## 2026-09-30 — Keep Pomodoro sessions consistent after reloads and pauses
+
+The timer now validates saved state, counts elapsed clock time, preserves the session start across reload/pause, and records the time actually spent on an interrupted session. Pausing after an expired deadline completes it once. History request errors are visible.
+
+Checks: 9 frontend regressions, 11 existing SQLite controller tests, changed-file hook lint and the production frontend build passed.
