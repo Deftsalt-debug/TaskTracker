@@ -1,6 +1,10 @@
 # TaskTrackr API Reference - Node.js Backend
 
-> Complete API documentation for the new Node.js/SQLite backend
+Routes and examples for the Express/SQLite backend. Start it from
+`nodejs-backend/`; see [README.md](README.md) for setup.
+
+Some response examples use `...` to shorten arrays; remove it before treating an
+example as literal JSON.
 
 ## 📡 Base URL
 
@@ -54,8 +58,8 @@ POST /api/auth/register
 
 **Validation Rules:**
 - Name: Required, non-empty
-- Email: Required, unique, valid format
-- Password: Required, any length (hashed with bcryptjs)
+- Email: Required, non-empty after trimming, unique; no format check is implemented
+- Password: Required and non-empty (hashed with bcryptjs)
 
 ---
 
@@ -97,7 +101,9 @@ POST /api/auth/login
 }
 ```
 
-**Note:** Token is returned from user.id in frontend authentication flow.
+**Note:** Login returns the user object. The frontend uses `user.id` in its
+local login state; this is not a signed token or verified server session. The API
+does not yet enforce ownership of tasks or Pomodoro sessions.
 
 ---
 
@@ -329,7 +335,7 @@ POST /api/pomodoro
 | `user_id` | integer | Yes | User ID |
 | `task_id` | integer | No | Associated task ID |
 | `session_type` | string | Yes | `work`, `short_break`, or `long_break` |
-| `duration_minutes` | integer | Yes | Duration in minutes |
+| `duration_minutes` | number | Yes | Duration in minutes; interrupted sessions can be fractional |
 | `started_at` | datetime | Yes | Session start time (ISO 8601 format) |
 | `ended_at` | datetime | No | Session end time |
 | `completed` | boolean | No | Whether session was completed |
@@ -373,7 +379,6 @@ GET /api/pomodoro?user_id=1
   "data": [
     {
       "id": 1,
-      "user_id": 1,
       "task_id": 5,
       "session_type": "work",
       "duration_minutes": 25,
@@ -405,9 +410,9 @@ GET /api/pomodoro?user_id=1
 
 ## 🔄 Backward Compatibility
 
-All old PHP endpoints still work! Both formats are supported:
+The following `.php` aliases call the same Node controllers as the REST routes:
 
-### Old PHP Format (Still Works!)
+### PHP-style aliases
 ```javascript
 POST /api/auth/login.php
 POST /api/auth/register.php
@@ -419,7 +424,7 @@ POST /api/pomodoro/save.php
 GET /api/pomodoro/history.php?user_id=1
 ```
 
-### New RESTful Format (Recommended)
+### REST routes
 ```javascript
 POST /api/auth/login
 POST /api/auth/register
@@ -431,7 +436,7 @@ POST /api/pomodoro
 GET /api/pomodoro?user_id=1
 ```
 
-Both work identically! The frontend automatically uses the correct format.
+The current frontend uses the REST routes. PHP is not needed to run either format.
 
 ---
 
@@ -476,22 +481,22 @@ Valid pomodoro session types:
 | 200 | OK | Request successful |
 | 201 | Created | Resource created successfully |
 | 400 | Bad Request | Invalid input or missing required fields |
-| 401 | Unauthorized | Invalid credentials or missing auth |
+| 401 | Unauthorized | Invalid login credentials |
 | 404 | Not Found | Resource not found |
 | 409 | Conflict | Email already registered (registration only) |
 | 500 | Server Error | Internal server error |
 
 ---
 
-## 🔐 Security Features
+## Backend checks and limits
 
-✅ **SQL Injection Prevention:** All queries use parameterized statements  
-✅ **Password Security:** Passwords hashed with bcryptjs  
-✅ **CORS Enabled:** Cross-origin requests allowed (configurable)  
-✅ **Data Validation:** All inputs validated before processing  
-✅ **Foreign Key Constraints:** Database integrity enforced  
+Queries use parameters, passwords are hashed with bcryptjs, and the database enables
+foreign-key constraints. Controllers check required fields and some allowed values;
+they don't validate every possible input. CORS allows cross-origin requests.
 
----
+The login flow does not create a verified session, and routes don't check the
+caller's ownership of a record. These checks still need work before using the app
+as a public multi-user service.
 
 ## 🧪 Example cURL Requests
 
@@ -541,7 +546,7 @@ curl "http://localhost:8080/api/tasks?user_id=1"
 ### Update Task
 
 ```bash
-curl -X PUT http://localhost:8080/api/tasks \
+curl -X PUT http://localhost:8080/api/tasks/1 \
   -H "Content-Type: application/json" \
   -d '{
     "id": 1,
@@ -598,7 +603,7 @@ CREATE TABLE pomodoro_sessions (
   user_id INTEGER NOT NULL,
   task_id INTEGER,
   session_type TEXT DEFAULT 'work',
-  duration_minutes INTEGER NOT NULL,
+  duration_minutes INTEGER NOT NULL,  -- SQLite also stores fractional numeric values
   started_at DATETIME NOT NULL,
   ended_at DATETIME,
   completed BOOLEAN DEFAULT 1,
@@ -611,17 +616,16 @@ CREATE TABLE pomodoro_sessions (
 
 ---
 
-## 🚀 Performance Optimizations
+## Database notes
 
-- ✅ **Indexes:** Created on user_id, category, task_id for fast queries
-- ✅ **Async/await:** Non-blocking database operations
-- ✅ **Connection pooling:** Persistent database connection
-- ✅ **Query optimization:** Only fetch required fields
-- ✅ **Limit on history:** Pomodoro history limited to recent 100 sessions
+The backend keeps one SQLite connection and exposes promise-based query helpers.
+Indexes cover task users/categories, session users/tasks and preference users.
+History returns at most 100 rows and selects the fields it displays.
 
----
+The schema examples above show the main columns. The full schema, including CHECK
+constraints, deletion behavior and `user_preferences`, is in
+`nodejs-backend/config/database.js`.
 
-**For more information, see:**
-- [NODEJS_SETUP.md](../nodejs-backend/NODEJS_SETUP.md) - Installation guide
-- [MIGRATION_GUIDE.md](../MIGRATION_GUIDE.md) - Technical migration details
-- [README.md](../README.md) - Application usage guide
+For setup, see [README.md](README.md) and [DATABASE_SETUP.md](DATABASE_SETUP.md).
+The [Node backend guide](nodejs-backend/NODEJS_SETUP.md) covers configuration
+and the PHP-style route aliases.

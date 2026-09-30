@@ -16,7 +16,7 @@ Checks on Node 26.10.0:
 - ESLint with the existing React App configuration on all three edited frontend files: **0 errors, 0 warnings**.
 - The frontend's existing test command found **no tests**. It is not counted as test coverage.
 
-Limits: no browser drag-and-drop or full login/history flow was exercised. Existing Pomodoro timing/history behavior still needs its own pass. This remains a local workshop app: the API does not enforce user authorization on task IDs, so these fixes do not make it suitable for public multi-user hosting. The build still reports an old Browserslist dataset.
+Limits: no browser drag-and-drop or full login/history flow was exercised. At this first checkpoint, Pomodoro timing/history had not been reviewed; the follow-up entry below records that pass. This remains a local workshop app: the API does not enforce user authorization on task IDs, so these fixes do not make it suitable for public multi-user hosting. The build still reports an old Browserslist dataset.
 
 ## 2026-09-30 — Keep Pomodoro sessions consistent after reloads and pauses
 
