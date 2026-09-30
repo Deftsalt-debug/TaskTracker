@@ -22,4 +22,4 @@ Limits: no browser drag-and-drop or full login/history flow was exercised. Exist
 
 The timer now validates saved state, counts elapsed clock time, preserves the session start across reload/pause, and records the time actually spent on an interrupted session. Pausing after an expired deadline completes it once. History request errors are visible.
 
-Checks: 9 frontend regressions, 11 existing SQLite controller tests, changed-file hook lint and the production frontend build passed.
+Checks: 9 frontend regressions, 13 SQLite controller/history tests, changed-file hook lint and the production frontend build passed.
