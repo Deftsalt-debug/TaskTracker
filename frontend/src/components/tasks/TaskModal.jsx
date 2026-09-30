@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { FaTimes, FaSpinner } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import axiosInstance from '../../api/axiosInstance';
@@ -72,6 +72,7 @@ const TaskModal = ({ task, onClose, onSave }) => {
           const updatedTask = { 
             ...task, 
             ...formData, 
+            is_completed: formData.category === 'completed',
             id: task.id, 
             user_id: user.id, 
             completed_pomodoros: task.completed_pomodoros || 0 
@@ -87,6 +88,7 @@ const TaskModal = ({ task, onClose, onSave }) => {
         if (response.data.status === 'success') {
           const newTask = { 
             ...formData, 
+            is_completed: formData.category === 'completed',
             id: parseInt(response.data.data.id), // Ensure ID is a number
             user_id: user.id,
             completed_pomodoros: 0,

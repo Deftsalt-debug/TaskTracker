@@ -15,8 +15,8 @@ import TaskModal from './TaskModal';
 //   - Opening the modal for creating/editing tasks
 //   - Calling the delete API
 //
-// You only need to complete ONE TODO in this file (handleDeleteTask).
-// Everything else is pre-written — read it, don't touch it.
+// The workshop TODO is handleDeleteTask. The search below is a small
+// follow-up: filter the visible cards without changing the saved tasks.
 //
 // Concepts to notice as you read:
 //   - Multiple useState hooks in one component
@@ -29,6 +29,12 @@ const TaskBoard = ({ tasks, onTaskCreated, onTaskUpdated, onTaskDeleted, onTaskM
   const [activeId, setActiveId] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [search, setSearch] = useState('');
+
+  const query = search.trim().toLowerCase();
+  const visibleTasks = tasks.filter(task =>
+    `${task.title} ${task.description || ''}`.toLowerCase().includes(query)
+  );
 
   const categories = [
     { id: 'priority', label: 'Priority', color: 'bg-priority' },
@@ -38,7 +44,7 @@ const TaskBoard = ({ tasks, onTaskCreated, onTaskUpdated, onTaskDeleted, onTaskM
   ];
 
   const getTasksByCategory = (category) => {
-    return tasks.filter(task => task.category === category);
+    return visibleTasks.filter(task => task.category === category);
   };
 
   const handleDragStart = (event) => {
@@ -114,6 +120,22 @@ const TaskBoard = ({ tasks, onTaskCreated, onTaskUpdated, onTaskDeleted, onTaskM
 
   return (
     <>
+      <div className="flex flex-wrap items-center gap-3 mb-5">
+        <label htmlFor="task-search" className="text-sm font-medium text-gray-600">Find a task</label>
+        <input
+          id="task-search"
+          type="search"
+          value={search}
+          onChange={event => setSearch(event.target.value)}
+          placeholder="That one assignment…"
+          className="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-completed"
+        />
+        {search && <button type="button" onClick={() => setSearch('')} className="text-sm text-gray-600 underline">Clear</button>}
+        <span role="status" className="text-sm text-gray-500">
+          {query ? `${visibleTasks.length} of ${tasks.length} tasks` : `${tasks.length} tasks`}
+        </span>
+      </div>
+      {query && visibleTasks.length === 0 && <p className="text-sm text-gray-500 mb-4">Nothing here yet. Try another word?</p>}
       <DndContext
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}

@@ -3,34 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FaPlay, FaPause, FaRedo, FaCheck, FaCog, FaTimes } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import axiosInstance from '../../api/axiosInstance';
+import { loadTimerState } from './timerState';
 
-const PomodoroTimer = ({ tasks }) => {
-  // Load initial state from localStorage or use defaults
-  const loadTimerState = () => {
-    try {
-      const saved = localStorage.getItem('pomodoroTimer');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch (error) {
-      console.error('Error loading timer state:', error);
-    }
-    return {
-      timeLeft: 25 * 60,
-      isActive: false,
-      sessionType: 'work',
-      sessionsCompleted: 0,
-      selectedTask: null,
-      durations: {
-        work: 25 * 60,
-        short_break: 5 * 60,
-        long_break: 15 * 60
-      },
-      lastUpdate: Date.now()
-    };
-  };
-
-  const initialState = loadTimerState();
+const PomodoroTimer = ({ tasks = [] }) => {
+  const [initialState] = useState(() => loadTimerState());
 
   const [timeLeft, setTimeLeft] = useState(initialState.timeLeft);
   const [isActive, setIsActive] = useState(initialState.isActive);
@@ -38,8 +14,11 @@ const PomodoroTimer = ({ tasks }) => {
   const [sessionsCompleted, setSessionsCompleted] = useState(initialState.sessionsCompleted);
   const [selectedTask, setSelectedTask] = useState(initialState.selectedTask);
   const [showSettings, setShowSettings] = useState(false);
-  const [sessionStartTime, setSessionStartTime] = useState(null);
+  const [sessionStartTime, setSessionStartTime] = useState(initialState.sessionStartTime);
   const audioRef = useRef(null);
+  const deadlineRef = useRef(Date.now() + initialState.timeLeft * 1000);
+  const completionHandled = useRef(false);
+  const completeSessionRef = useRef(null);
 
   const [durations, setDurations] = useState(initialState.durations);
 
@@ -52,40 +31,33 @@ const PomodoroTimer = ({ tasks }) => {
       sessionsCompleted,
       selectedTask,
       durations,
+      sessionStartTime,
       lastUpdate: Date.now()
     };
-    localStorage.setItem('pomodoroTimer', JSON.stringify(state));
-  }, [timeLeft, isActive, sessionType, sessionsCompleted, selectedTask, durations]);
-
-  // Calculate elapsed time when component mounts if timer was active
-  useEffect(() => {
-    if (initialState.isActive && initialState.lastUpdate) {
-      const elapsed = Math.floor((Date.now() - initialState.lastUpdate) / 1000);
-      const newTimeLeft = Math.max(0, initialState.timeLeft - elapsed);
-      setTimeLeft(newTimeLeft);
-      
-      // If time ran out while away, complete the session
-      if (newTimeLeft === 0) {
-        handleSessionComplete();
-      }
+    try {
+      localStorage.setItem('pomodoroTimer', JSON.stringify(state));
+    } catch {
+      // The timer can still run if browser storage is full or disabled.
     }
-  }, []);
+  }, [timeLeft, isActive, sessionType, sessionsCompleted, selectedTask, durations, sessionStartTime]);
 
   useEffect(() => {
-    let interval = null;
-
-    if (isActive && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft((time) => time - 1);
-      }, 1000);
-    } else if (timeLeft === 0 && isActive) {
-      handleSessionComplete();
+    if (!isActive) return;
+    if (timeLeft === 0) {
+      completeSessionRef.current();
+      return;
     }
-
+    // Use the clock, rather than counting callbacks: background tabs throttle
+    // intervals, but a minute should still be a minute.
+    const interval = setInterval(() => {
+      setTimeLeft(Math.max(0, Math.ceil((deadlineRef.current - Date.now()) / 1000)));
+    }, 1000);
     return () => clearInterval(interval);
   }, [isActive, timeLeft]);
 
   const handleSessionComplete = () => {
+    if (completionHandled.current) return;
+    completionHandled.current = true;
     setIsActive(false);
     playNotification();
 
@@ -119,6 +91,8 @@ const PomodoroTimer = ({ tasks }) => {
     }
   };
 
+  completeSessionRef.current = handleSessionComplete;
+
   const updateTaskPomodoros = async (taskId) => {
     try {
       const task = tasks.find(t => t.id === parseInt(taskId));
@@ -150,9 +124,18 @@ const PomodoroTimer = ({ tasks }) => {
   const saveSession = async (completed = true) => {
     if (!sessionStartTime) return;
 
+    // Capture and clear this session before the request. A slow save must not
+    // clear the start time of a new session started in the meantime.
+    const startedAt = sessionStartTime;
+    setSessionStartTime(null);
+    const remaining = isActive
+      ? Math.max(0, Math.ceil((deadlineRef.current - Date.now()) / 1000))
+      : timeLeft;
+    const spentSeconds = completed ? durations[sessionType] : durations[sessionType] - remaining;
+    const durationMinutes = Math.round(spentSeconds / 60 * 100) / 100;
+    if (durationMinutes <= 0) return;
     try {
       const endTime = new Date().toISOString();
-      const durationMinutes = Math.round(durations[sessionType] / 60);
       
       // Get user from localStorage
       const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -166,15 +149,14 @@ const PomodoroTimer = ({ tasks }) => {
         task_id: selectedTask || null,
         session_type: sessionType,
         duration_minutes: durationMinutes,
-        started_at: sessionStartTime,
+        started_at: startedAt,
         ended_at: endTime,
         completed: completed ? 1 : 0,
         notes: null
       });
     } catch (error) {
       console.error('Error saving pomodoro session:', error);
-    } finally {
-      setSessionStartTime(null);
+      toast.error('Could not save this session to history.');
     }
   };
 
@@ -186,28 +168,31 @@ const PomodoroTimer = ({ tasks }) => {
 
   const toggleTimer = () => {
     if (!isActive) {
-      // Starting timer - record start time
-      setSessionStartTime(new Date().toISOString());
+      if (!sessionStartTime) setSessionStartTime(new Date().toISOString());
+      deadlineRef.current = Date.now() + timeLeft * 1000;
+      completionHandled.current = false;
     } else {
-      // Pausing timer - save incomplete session
-      if (sessionStartTime) {
-        saveSession(false);
+      const remaining = Math.max(0, Math.ceil((deadlineRef.current - Date.now()) / 1000));
+      if (remaining === 0) {
+        handleSessionComplete();
+        return;
       }
+      setTimeLeft(remaining);
     }
+    // Pausing keeps this one session; resuming doesn't create a second row.
     setIsActive(!isActive);
   };
 
   const resetTimer = () => {
-    // Save incomplete session if timer was running
-    if (isActive && sessionStartTime) {
-      saveSession(false);
-    }
+    if (sessionStartTime) saveSession(false);
     setIsActive(false);
     setTimeLeft(durations[sessionType]);
     setSessionStartTime(null);
   };
 
   const switchSession = (type) => {
+    if (sessionStartTime) saveSession(false);
+    setSessionStartTime(null);
     setIsActive(false);
     setSessionType(type);
     setTimeLeft(durations[type]);
@@ -220,8 +205,6 @@ const PomodoroTimer = ({ tasks }) => {
   };
 
   const progress = ((durations[sessionType] - timeLeft) / durations[sessionType]) * 100;
-  const circumference = 2 * Math.PI * 140;
-  const strokeDashoffset = circumference - (progress / 100) * circumference;
 
   const sessionColors = {
     work: '#708238',
@@ -234,6 +217,7 @@ const PomodoroTimer = ({ tasks }) => {
     const cappedMinutes = Math.min(999, Math.max(1, minutes));
     setDurations(prev => ({ ...prev, [type]: cappedMinutes * 60 }));
     if (sessionType === type && !isActive) {
+      if (sessionStartTime) saveSession(false);
       setTimeLeft(cappedMinutes * 60);
     }
   };
@@ -361,7 +345,7 @@ const PomodoroTimer = ({ tasks }) => {
             </div>
             {sessionsCompleted > 0 && (
               <div className="text-xs text-gray-600 mt-1 font-semibold">
-                {sessionsCompleted} completed today
+                {sessionsCompleted} sessions completed
               </div>
             )}
           </div>
@@ -379,6 +363,8 @@ const PomodoroTimer = ({ tasks }) => {
             </label>
             <div className="relative">
               <select
+                aria-label="Working on task"
+                disabled={Boolean(sessionStartTime)}
                 value={selectedTask || ''}
                 onChange={(e) => setSelectedTask(e.target.value)}
                 className="w-full px-3 py-2.5 text-xs sm:text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-completed focus:border-transparent bg-white shadow-sm hover:border-gray-400 transition-colors appearance-none cursor-pointer font-medium text-gray-700"
@@ -412,6 +398,7 @@ const PomodoroTimer = ({ tasks }) => {
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
+            aria-label={isActive ? 'Pause timer' : 'Start timer'}
             onClick={toggleTimer}
             className="bg-completed text-white p-4 sm:p-5 rounded-full shadow-xl hover:bg-inProgress transition-colors"
           >
@@ -421,6 +408,7 @@ const PomodoroTimer = ({ tasks }) => {
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
+            aria-label="Reset timer"
             onClick={resetTimer}
             className="bg-gunmetal text-white p-3 sm:p-4 rounded-full shadow-lg hover:bg-smoke transition-colors"
           >
@@ -454,6 +442,7 @@ const PomodoroTimer = ({ tasks }) => {
               >
                 {/* Close Button */}
                 <button
+                  aria-label="Close timer settings"
                   onClick={() => setShowSettings(false)}
                   className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
                 >
@@ -476,6 +465,8 @@ const PomodoroTimer = ({ tasks }) => {
                         type="number"
                         min="1"
                         max="999"
+                        aria-label="Work minutes"
+                        disabled={isActive}
                         value={Math.floor(durations.work / 60)}
                         onChange={(e) => updateDuration('work', parseInt(e.target.value) || 25)}
                         className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-completed focus:border-transparent text-lg font-semibold"
@@ -494,6 +485,8 @@ const PomodoroTimer = ({ tasks }) => {
                         type="number"
                         min="1"
                         max="999"
+                        aria-label="Short break minutes"
+                        disabled={isActive}
                         value={Math.floor(durations.short_break / 60)}
                         onChange={(e) => updateDuration('short_break', parseInt(e.target.value) || 5)}
                         className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-completed focus:border-transparent text-lg font-semibold"
@@ -512,6 +505,8 @@ const PomodoroTimer = ({ tasks }) => {
                         type="number"
                         min="1"
                         max="999"
+                        aria-label="Long break minutes"
+                        disabled={isActive}
                         value={Math.floor(durations.long_break / 60)}
                         onChange={(e) => updateDuration('long_break', parseInt(e.target.value) || 15)}
                         className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-completed focus:border-transparent text-lg font-semibold"
@@ -530,6 +525,7 @@ const PomodoroTimer = ({ tasks }) => {
 
                 {/* Close Button */}
                 <button
+                  aria-label="Close timer settings"
                   onClick={() => setShowSettings(false)}
                   className="w-full mt-6 py-3 bg-completed text-white rounded-lg font-semibold hover:bg-inProgress transition-colors shadow-md"
                 >

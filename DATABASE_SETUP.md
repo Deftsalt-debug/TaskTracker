@@ -1,126 +1,61 @@
-# 🗄️ Database Setup Guide
+# TaskTrackr database setup
 
-## Quick Setup (5 minutes)
+The current Node backend uses SQLite. It creates the database and tables when it
+starts, so there is no separate database server or schema import to set up.
 
-### Step 1: Open phpMyAdmin
-Open in your browser: **http://localhost:8080/phpmyadmin**
+## Start with the default database
 
-### Step 2: Create Database
-1. Click **"New"** in the left sidebar
-2. Enter database name: `tasktrackr`
-3. Select collation: `utf8mb4_general_ci`
-4. Click **"Create"**
+From the project folder:
 
-### Step 3: Import Schema
-1. Click on the **`tasktrackr`** database in the left sidebar
-2. Go to the **"Import"** tab at the top
-3. Click **"Choose File"**
-4. Navigate to: `C:\Users\anshu\OneDrive\Desktop\5th sem\WebTech MiniProject\database\schema.sql`
-5. Click **"Go"** at the bottom
+```bash
+cd nodejs-backend
+npm install
+npm start
+```
 
-### Step 4: Verify Tables Created
-You should see 4 tables created:
-- ✅ `users`
-- ✅ `tasks`
-- ✅ `pomodoro_sessions`
-- ✅ `user_preferences`
+The file is `nodejs-backend/database/tasktrackr.db`. The schema lives in
+`config/database.js` and creates four tables: `users`, `tasks`,
+`pomodoro_sessions` and `user_preferences`.
 
----
+The SQL files in the root `database/` folder are kept from the earlier setup. They
+are not imported by the current backend. The old MySQL/phpMyAdmin instructions
+were for that setup, not this one.
 
-## Alternative: SQL Command Line
+## Use another database file
 
-If phpMyAdmin doesn't work, you can use MySQL command line:
+`DB_PATH` can select a different file. Its parent folder must already exist. For
+example, from `nodejs-backend/` on macOS or Linux:
 
-1. Open XAMPP Shell or Command Prompt
-2. Navigate to MySQL bin folder:
-   ```bash
-   cd D:\NEw\mysql\bin
-   ```
-3. Login to MySQL:
-   ```bash
-   mysql -u root -p
-   ```
-   (Press Enter if there's no password)
+```bash
+DB_PATH=./database/tasktrackr-dev.db npm start
+```
 
-4. Run these commands:
-   ```sql
-   CREATE DATABASE tasktrackr;
-   USE tasktrackr;
-   SOURCE C:/Users/anshu/OneDrive/Desktop/5th sem/WebTech MiniProject/database/schema.sql;
-   SHOW TABLES;
-   ```
+In Windows PowerShell:
 
----
+```powershell
+$env:DB_PATH = './database/tasktrackr-dev.db'
+npm start
+```
 
-## After Database Setup
+Tests set `DB_PATH` to `:memory:` and use temporary, in-memory databases. Running
+`npm test` does not overwrite your saved tasks.
 
-### Test the Application:
+## Back up your data
 
-1. **Register a New User**
-   - Go to http://localhost:3000
-   - Click "Register" or go to Register page
-   - Fill in: Name, Email, Password
-   - Click "Register"
+Stop the backend normally, then copy `tasktrackr.db` somewhere safe. Keep the copy
+before replacing or deleting a database file: it contains the users, tasks and
+session history. To restore it, stop the backend again and put the saved copy back
+at the same path.
 
-2. **Login**
-   - Use your email and password
-   - You should be redirected to the Tasks page
+## Check that it works
 
-3. **Create Your First Task**
-   - Click "Add Task" button
-   - Fill in task details
-   - Choose category: Upcoming, In Progress, Priority, or Completed
-   - Set priority level
-   - Click "Create Task"
+Start the frontend in another terminal with `cd frontend`, `npm ci` and `npm start`
+from the project folder. Open [localhost:3000](http://localhost:3000), register and
+create a task. Reload the page to check persistence, then try a timer session and
+look at History.
 
-4. **Test Drag & Drop**
-   - Drag tasks between columns
-   - Tasks should move smoothly
+The API base is [localhost:8080/api](http://localhost:8080/api). You can check the
+backend without logging in at [localhost:8080/health](http://localhost:8080/health).
 
-5. **Test Pomodoro Timer**
-   - Click on the Focus/Timer icon in sidebar
-   - Select a task
-   - Start the timer
-   - Watch the circular progress animation
-
-6. **Check Dashboard Footer**
-   - See real-time statistics
-   - Total tasks, completed, in progress counts
-
----
-
-## Troubleshooting
-
-### Can't access phpMyAdmin?
-- Make sure Apache and MySQL are both running in XAMPP Control Panel
-- Try: http://localhost:8080/phpmyadmin (with port 8080)
-
-### "Access denied for user 'root'"?
-- Default username: `root`
-- Default password: (empty/blank)
-- If not working, check `backend/config/db.php` for correct credentials
-
-### Import fails?
-- Make sure you selected the `tasktrackr` database before importing
-- Check if file path is correct
-- Try copying SQL content and pasting in "SQL" tab instead
-
----
-
-## 🎉 You're All Set!
-
-Once database is created, your TaskTrackr app is fully functional!
-
-**Application URLs:**
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8080/backend/api
-- phpMyAdmin: http://localhost:8080/phpmyadmin
-- Apache Test: http://localhost:8080
-
-**Next Steps:**
-1. Create database in phpMyAdmin
-2. Register your first user
-3. Start creating and managing tasks!
-4. Test all features using TESTING_GUIDE.md
-
-Happy Task Tracking! 📋✨
+If the database can't be opened, check that the selected directory exists and is
+writable. If dependency installation fails, see [PREREQUISITES.md](PREREQUISITES.md).
