@@ -56,33 +56,34 @@ const TasksPage = () => {
   };
 
   const handleTaskCreated = (newTask) => {
-    // TODO 7: Add the new task to the existing tasks array
+  // TODO 7: Add the new task to the existing tasks array
     // Important: you must create a NEW array — never mutate state directly
     // The spread operator ... copies all existing items, then adds the new one
-    // Hint: setTasks([...tasks, newTask]);
-    setTasks([...tasks, newTask]);
+    // The callback reads the latest tasks, even if another request just finished.
+    // Hint: setTasks(current => [...current, newTask]);
+    setTasks(current => [...current, newTask]);
     toast.success('Task created successfully!');
   };
 
   const handleTaskUpdated = (updatedTask) => {
     // TODO 8: Replace the old version of this task with the updated one
     // Use tasks.map() — if the task id matches, return updatedTask, otherwise return the original
-    // Hint: setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
-    setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+    // Hint: setTasks(current => current.map(t => t.id === updatedTask.id ? updatedTask : t));
+    setTasks(current => current.map(t => t.id === updatedTask.id ? updatedTask : t));
     toast.success('Task updated successfully!');
   };
 
   const handleTaskDeleted = (taskId) => {
     // TODO 9: Remove this task from the array
     // Use tasks.filter() — keep only tasks whose id does NOT match taskId
-    // Hint: setTasks(tasks.filter(t => t.id !== taskId));
-    setTasks(tasks.filter(t => t.id !== taskId));
+    // Hint: setTasks(current => current.filter(t => t.id !== taskId));
+    setTasks(current => current.filter(t => t.id !== taskId));
     toast.success('Task deleted successfully!');
   };
 
-  // ── PRE-WRITTEN: Don't modify ──
+  // Keep the local completion flag in step with the destination column.
   const handleTaskMoved = (taskId, newCategory) => {
-    setTasks(tasks.map(t => parseInt(t.id) === parseInt(taskId) ? { ...t, category: newCategory } : t));
+    setTasks(current => current.map(t => parseInt(t.id) === parseInt(taskId) ? { ...t, category: newCategory, is_completed: newCategory === 'completed' } : t));
   };
 
   return (

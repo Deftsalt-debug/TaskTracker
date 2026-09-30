@@ -13,18 +13,20 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-const dbPath = path.join(dbDir, 'tasktrackr.db');
+const dbPath = process.env.DB_PATH || path.join(dbDir, 'tasktrackr.db');
 
 // Create a wrapper around SQLite3 to work with promises
 class Database {
   constructor(dbPath) {
-    this.db = new sqlite3.Database(dbPath, (err) => {
-      if (err) {
-        console.error('Error opening database:', err);
-      } else {
-        console.log('Connected to SQLite database at:', dbPath);
-        this.initializeDatabase();
-      }
+    this.ready = new Promise((resolve, reject) => {
+      this.db = new sqlite3.Database(dbPath, (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          console.log('Connected to SQLite database at:', dbPath);
+          this.initializeDatabase().then(resolve, reject);
+        }
+      });
     });
     
     // Promisify database methods
@@ -104,17 +106,20 @@ class Database {
       CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences(user_id);
     `;
 
-    this.db.exec(schema, (err) => {
-      if (err) {
-        console.error('Error initializing database schema:', err);
-      } else {
-        console.log('Database schema initialized successfully');
-      }
+    return new Promise((resolve, reject) => {
+      this.db.exec(schema, (err) => {
+        if (err) reject(err);
+        else {
+          console.log('Database schema initialized successfully');
+          resolve();
+        }
+      });
     });
   }
 
   // Wrapper methods for async database operations
-  run(sql, params = []) {
+  async run(sql, params = []) {
+    await this.ready;
     return new Promise((resolve, reject) => {
       this.db.run(sql, params, function(err) {
         if (err) {
@@ -126,7 +131,8 @@ class Database {
     });
   }
 
-  get(sql, params = []) {
+  async get(sql, params = []) {
+    await this.ready;
     return new Promise((resolve, reject) => {
       this.db.get(sql, params, (err, row) => {
         if (err) {
@@ -138,7 +144,8 @@ class Database {
     });
   }
 
-  all(sql, params = []) {
+  async all(sql, params = []) {
+    await this.ready;
     return new Promise((resolve, reject) => {
       this.db.all(sql, params, (err, rows) => {
         if (err) {
