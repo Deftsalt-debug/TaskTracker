@@ -1,0 +1,21 @@
+{
+  "name": "tasktrackr-backend",
+  "version": "2.0.0",
+  "private": true,
+  "description": "TaskTrackr API: Express on Node's built-in SQLite, with signed session tokens.",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}

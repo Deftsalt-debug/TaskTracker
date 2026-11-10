@@ -1,114 +1,80 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import TaskBoard from '../components/tasks/TaskBoard';
-import axiosInstance from '../api/axiosInstance';
+import axiosInstance, { errorMessage } from '../api/axiosInstance';
 
+/** Owns the task list: loads it once, then applies each change the board reports. */
 const TasksPage = () => {
-
-  // TODO 1: Declare a state variable called 'tasks'
-  // It should start as an empty array []
-  // Hint: const [tasks, setTasks] = useState([]);
   const [tasks, setTasks] = useState([]);
-
-  // TODO 2: Declare a state variable called 'loading'
-  // It should start as true — the page is loading when it first opens
-  // Hint: const [loading, setLoading] = useState(true);
   const [loading, setLoading] = useState(true);
-
-  // TODO 3: Call fetchTasks() when the page first loads
-  // useEffect runs code after the component renders
-  // The empty [] means "run this only once, on first load"
-  // Hint: useEffect(() => { fetchTasks(); }, []);
-  useEffect(() => { fetchTasks(); }, []);
+  const [failed, setFailed] = useState('');
 
   const fetchTasks = async () => {
+    setLoading(true);
+    setFailed('');
     try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      if (!user.id) {
-        toast.error('User not found. Please login again.');
-        return;
-      }
-
-      // TODO 4: Fetch tasks from the API
-      // Use axiosInstance to make a GET request to '/tasks?user_id={user.id}'
-      // Store the result in a variable called 'response'
-      // Hint: const response = await axiosInstance.get(`/tasks?user_id=${user.id}`);
-      const response = await axiosInstance.get(`/tasks?user_id=${user.id}`);
-
-
-      // TODO 5: Update the tasks state with the data you just fetched
-      // Check if response.data.status === 'success'
-      // If yes, call setTasks() with response.data.data
-      // Hint: if (response.data.status === 'success') { setTasks(response.data.data); }
-      if (response.data.status === 'success') { setTasks(response.data.data); }
-
-
+      const response = await axiosInstance.get('/tasks');
+      setTasks(response.data.data);
     } catch (error) {
-      toast.error('Failed to fetch tasks');
+      setFailed(errorMessage(error, 'Could not load your tasks.'));
     } finally {
-      // TODO 6: Stop the loading spinner
-      // Set loading to false — this runs whether the request succeeded or failed
-      // Hint: setLoading(false);
       setLoading(false);
-
     }
   };
 
+  useEffect(() => {
+    fetchTasks();
+    // A focus session finishing elsewhere changes a task's count; pick that up quietly.
+    const refresh = () => axiosInstance.get('/tasks').then((response) => setTasks(response.data.data)).catch(() => {});
+    window.addEventListener('tasksStale', refresh);
+    return () => window.removeEventListener('tasksStale', refresh);
+  }, []);
+
+  // The footer statistics listen for this to refresh themselves.
+  const announce = () => window.dispatchEvent(new Event('taskChange'));
+
   const handleTaskCreated = (newTask) => {
-    // TODO 7: Add the new task to the existing tasks array
-    // Important: you must create a NEW array — never mutate state directly
-    // The spread operator ... copies all existing items, then adds the new one
-    // Hint: setTasks([...tasks, newTask]);
-    setTasks([...tasks, newTask]);
-    toast.success('Task created successfully!');
+    setTasks((current) => [newTask, ...current]);
+    toast.success('Task created');
+    announce();
   };
 
   const handleTaskUpdated = (updatedTask) => {
-    // TODO 8: Replace the old version of this task with the updated one
-    // Use tasks.map() — if the task id matches, return updatedTask, otherwise return the original
-    // Hint: setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
-    setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
-    toast.success('Task updated successfully!');
+    setTasks((current) => current.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
+    announce();
   };
 
   const handleTaskDeleted = (taskId) => {
-    // TODO 9: Remove this task from the array
-    // Use tasks.filter() — keep only tasks whose id does NOT match taskId
-    // Hint: setTasks(tasks.filter(t => t.id !== taskId));
-    setTasks(tasks.filter(t => t.id !== taskId));
-    toast.success('Task deleted successfully!');
+    setTasks((current) => current.filter((t) => t.id !== taskId));
+    toast.success('Task deleted');
+    announce();
   };
 
-  // ── PRE-WRITTEN: Don't modify ──
-  const handleTaskMoved = (taskId, newCategory) => {
-    setTasks(tasks.map(t => parseInt(t.id) === parseInt(taskId) ? { ...t, category: newCategory } : t));
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96" role="status" aria-label="Loading tasks">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          className="w-12 h-12 border-4 border-completed border-t-transparent rounded-full"
+        />
+      </div>
+    );
+  }
+
+  if (failed) {
+    return (
+      <div className="max-w-md mx-auto mt-24 text-center bg-white rounded-2xl shadow p-8" role="alert">
+        <p className="text-lg font-semibold text-gunmetal">{failed}</p>
+        <button onClick={fetchTasks} className="mt-5 px-5 py-2.5 rounded-lg bg-completed text-white font-semibold hover:bg-primary-700 transition-colors">Try again</button>
+      </div>
+    );
+  }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="h-full"
-    >
-      {loading ? (
-        <div className="flex items-center justify-center h-96">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-            className="w-12 h-12 border-4 border-completed border-t-transparent rounded-full"
-          />
-        </div>
-      ) : (
-        <TaskBoard
-          tasks={tasks}
-          onTaskCreated={handleTaskCreated}
-          onTaskUpdated={handleTaskUpdated}
-          onTaskDeleted={handleTaskDeleted}
-          onTaskMoved={handleTaskMoved}
-        />
-      )}
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="h-full">
+      <TaskBoard tasks={tasks} onTaskCreated={handleTaskCreated} onTaskUpdated={handleTaskUpdated} onTaskDeleted={handleTaskDeleted} />
     </motion.div>
   );
 };

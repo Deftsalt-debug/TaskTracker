@@ -1,71 +1,68 @@
 import React from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { FaTasks, FaBullseye, FaHistory, FaSignOutAlt } from 'react-icons/fa';
+import { getUser, signOut } from '../../auth';
+import { useTimer } from '../../timer/TimerContext';
+import { PHASE_LABELS, formatClock } from '../../timer/engine';
+
+const navItems = [
+  { icon: FaTasks, label: 'Tasks', path: '/tasks' },
+  { icon: FaBullseye, label: 'Focus', path: '/focus' },
+  { icon: FaHistory, label: 'History', path: '/history' },
+];
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    window.dispatchEvent(new Event('authChange'));
-    navigate('/login');
-  };
-
-  const navItems = [
-    { icon: FaTasks, label: 'Tasks', path: '/tasks' },
-    { icon: FaBullseye, label: 'Focus', path: '/focus' },
-    { icon: FaHistory, label: 'History', path: '/history' },
-  ];
+  const { timer, remainingMs } = useTimer();
+  const user = getUser();
+  const ticking = timer.status !== 'idle';
 
   return (
-    <motion.nav
-      initial={{ y: -20, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      className="bg-transparent backdrop-blur-sm py-3 px-3 sm:px-6 flex items-center justify-between"
-    >
-      {/* Logo */}
-      <motion.div
-        whileHover={{ scale: 1.05 }}
-        className="flex items-center gap-2"
-      >
-        <div className="text-2xl sm:text-3xl">✓</div>
-        <h1 className="text-lg sm:text-2xl font-bold text-gunmetal">TaskTrackr</h1>
-      </motion.div>
+    <header className="py-3 px-3 sm:px-6 flex items-center justify-between gap-3">
+      <NavLink to="/tasks" className="flex items-center gap-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-completed">
+        <span aria-hidden="true" className="grid place-items-center w-8 h-8 rounded-lg bg-completed text-white font-bold">✓</span>
+        <span className="text-lg sm:text-xl font-bold text-gunmetal">TaskTrackr</span>
+      </NavLink>
 
-      {/* Navigation Buttons */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        {navItems.map((item) => (
-          <motion.button
-            key={item.path}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => navigate(item.path)}
-            className={`px-2 sm:px-4 py-2 rounded-lg font-medium flex items-center gap-1 sm:gap-2 transition-all text-sm sm:text-base ${
-              location.pathname === item.path
-                ? 'bg-gunmetal text-white shadow-md'
-                : 'text-gunmetal hover:bg-gunmetal hover:text-white'
-            }`}
+      <div className="flex items-center gap-1.5 sm:gap-2">
+        {ticking && (
+          <button
+            type="button"
+            onClick={() => navigate('/focus')}
+            aria-label={`${PHASE_LABELS[timer.phase]} timer, ${formatClock(remainingMs)} left${timer.status === 'paused' ? ', paused' : ''}. Open the timer.`}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/80 text-gunmetal font-semibold tabular-nums hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-completed transition-colors"
           >
-            <item.icon className="text-sm sm:text-base" />
-            <span className="hidden sm:inline">{item.label}</span>
-          </motion.button>
-        ))}
-
-        {/* Logout Button */}
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={handleLogout}
-          className="px-2 sm:px-4 py-2 rounded-lg bg-red-600 text-white font-medium flex items-center gap-1 sm:gap-2 hover:bg-red-700 transition-colors shadow-md text-sm sm:text-base"
+            <span className={`w-2 h-2 rounded-full ${timer.status === 'running' ? 'bg-red-500 animate-pulse' : 'bg-smoke'}`} aria-hidden="true" />
+            {formatClock(remainingMs)}
+          </button>
+        )}
+        <nav className="flex items-center gap-1 sm:gap-1.5" aria-label="Main">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) => `px-2.5 sm:px-4 py-2 rounded-lg font-medium flex items-center gap-2 text-sm sm:text-base transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-completed ${
+                isActive ? 'bg-gunmetal text-white shadow' : 'text-gunmetal hover:bg-white/70'
+              }`}
+            >
+              <item.icon aria-hidden="true" />
+              <span className="hidden sm:inline">{item.label}</span>
+              <span className="sr-only sm:hidden">{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+        <button
+          type="button"
+          onClick={() => { signOut(); navigate('/login'); }}
+          title={user ? `Signed in as ${user.name}` : undefined}
+          className="px-2.5 sm:px-3 py-2 rounded-lg text-gunmetal font-medium flex items-center gap-2 text-sm sm:text-base hover:bg-white/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-completed transition-colors"
         >
-          <FaSignOutAlt className="text-sm sm:text-base" />
-          <span className="hidden sm:inline">Logout</span>
-        </motion.button>
+          <FaSignOutAlt aria-hidden="true" />
+          <span className="hidden md:inline">Sign out</span>
+          <span className="sr-only md:hidden">Sign out</span>
+        </button>
       </div>
-    </motion.nav>
+    </header>
   );
 };
 

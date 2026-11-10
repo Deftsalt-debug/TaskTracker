@@ -1,105 +1,71 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React, { useEffect, useState } from 'react';
 import axiosInstance from '../../api/axiosInstance';
+import { isSameLocalDay } from '../../lib/dates';
 
+const empty = { total: 0, upcoming: 0, in_progress: 0, priority: 0, completed: 0, today: 0 };
+
+const Stat = ({ label, value, dot }) => (
+  <div className="flex flex-col items-center min-w-[56px]">
+    <dd className="text-xl font-bold text-white tabular-nums">{value}</dd>
+    <dt className="flex items-center gap-1.5 text-xs text-gray-300">
+      {dot && <span className={`w-2 h-2 rounded-full ${dot}`} aria-hidden="true" />}{label}
+    </dt>
+  </div>
+);
+
+/** A strip of live counts under every page; refreshes whenever tasks change. */
 const DashboardFooter = () => {
-  const [stats, setStats] = useState({
-    total: 0,
-    upcoming: 0,
-    inProgress: 0,
-    priority: 0,
-    completed: 0,
-    completionRate: 0,
-    todayCompleted: 0,
-  });
+  const [stats, setStats] = useState(empty);
 
   useEffect(() => {
-    fetchStats();
-    
-    // Listen for task changes and refetch stats
-    const handleTaskChange = () => fetchStats();
-    window.addEventListener('taskChange', handleTaskChange);
-    
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const tasks = (await axiosInstance.get('/tasks')).data.data;
+        if (cancelled) return;
+        const next = { ...empty, total: tasks.length };
+        for (const task of tasks) {
+          next[task.category] += 1;
+          if (task.completed_at && isSameLocalDay(task.completed_at)) next.today += 1;
+        }
+        setStats(next);
+      } catch {
+        // The page itself reports load failures; the footer just keeps its last numbers.
+      }
+    };
+    refresh();
+    window.addEventListener('taskChange', refresh);
+    window.addEventListener('tasksStale', refresh);
     return () => {
-      window.removeEventListener('taskChange', handleTaskChange);
+      cancelled = true;
+      window.removeEventListener('taskChange', refresh);
+      window.removeEventListener('tasksStale', refresh);
     };
   }, []);
 
-  const fetchStats = async () => {
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      if (!user.id) return;
-
-      const response = await axiosInstance.get(`/tasks?user_id=${user.id}`);
-      if (response.data.status === 'success') {
-        const tasks = response.data.data;
-        const total = tasks.length;
-        const upcoming = tasks.filter(t => t.category === 'upcoming').length;
-        const inProgress = tasks.filter(t => t.category === 'in_progress').length;
-        const priority = tasks.filter(t => t.category === 'priority').length;
-        const completed = tasks.filter(t => t.category === 'completed').length;
-        const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-        // Today's completed tasks
-        const today = new Date().toISOString().split('T')[0];
-        const todayCompleted = tasks.filter(t => t.completed_at && t.completed_at.startsWith(today)).length;
-
-        setStats({ total, upcoming, inProgress, priority, completed, completionRate, todayCompleted });
-      }
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
-  };
-
-  const StatCard = ({ label, value, color }) => (
-    <div className="flex flex-col items-center">
-      <div className={`text-2xl font-bold ${color}`}>{value}</div>
-      <div className="text-xs text-gray-400">{label}</div>
-    </div>
-  );
+  const rate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+  const circumference = 2 * Math.PI * 16;
 
   return (
-    <footer className="hidden sm:block bg-gunmetal border-t border-gray-700 py-2 px-6 sticky bottom-0">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between gap-8">
-          <StatCard label="Total" value={stats.total} color="text-white" />
-          <StatCard label="Upcoming" value={stats.upcoming} color="text-paleGreen" />
-          <StatCard label="Progress" value={stats.inProgress} color="text-[#708238]" />
-          <StatCard label="Priority" value={stats.priority} color="text-[#9a6b4f]" />
-          <StatCard label="Done" value={stats.completed} color="text-[#556b2f]" />
-          
-          {/* Completion Rate */}
-          <div className="flex flex-col items-center">
-            <div className="relative w-12 h-12">
-              <svg className="transform -rotate-90 w-12 h-12">
-                <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4" fill="none" className="text-gray-700" />
-                <circle
-                  cx="24"
-                  cy="24"
-                  r="20"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                  fill="none"
-                  className="text-green-400"
-                  strokeDasharray={`${2 * Math.PI * 20}`}
-                  strokeDashoffset={2 * Math.PI * 20 * (1 - stats.completionRate / 100)}
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-xs">
-                {stats.completionRate}%
-              </div>
-            </div>
-            <div className="text-xs text-gray-400 mt-1">Done</div>
-          </div>
-
-          {/* Today */}
-          <div className="flex flex-col items-center">
-            <div className="text-2xl font-bold text-green-400">{stats.todayCompleted}</div>
-            <div className="text-xs text-gray-400">Today</div>
+    <footer className="hidden sm:block bg-gunmetal py-2.5 px-6" aria-label="Task summary">
+      <dl className="max-w-5xl mx-auto flex items-center justify-between gap-6 m-0">
+        <Stat label="Total" value={stats.total} />
+        <Stat label="Priority" value={stats.priority} dot="bg-priority" />
+        <Stat label="Upcoming" value={stats.upcoming} dot="bg-upcoming" />
+        <Stat label="In progress" value={stats.in_progress} dot="bg-inProgress" />
+        <Stat label="Completed" value={stats.completed} dot="bg-completed ring-1 ring-white/40" />
+        <Stat label="Done today" value={stats.today} />
+        <div className="flex items-center gap-2.5">
+          <svg width="40" height="40" viewBox="0 0 40 40" className="-rotate-90" aria-hidden="true">
+            <circle cx="20" cy="20" r="16" fill="none" strokeWidth="4" className="stroke-white/15" />
+            <circle cx="20" cy="20" r="16" fill="none" strokeWidth="4" strokeLinecap="round" className="stroke-paleGreen transition-[stroke-dashoffset] duration-500" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - rate / 100)} />
+          </svg>
+          <div className="flex flex-col">
+            <dd className="text-xl font-bold text-white tabular-nums leading-tight">{rate}%</dd>
+            <dt className="text-xs text-gray-300">complete</dt>
           </div>
         </div>
-      </div>
+      </dl>
     </footer>
   );
 };

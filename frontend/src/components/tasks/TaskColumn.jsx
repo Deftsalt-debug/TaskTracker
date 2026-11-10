@@ -1,98 +1,60 @@
 import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { FaPlus } from 'react-icons/fa';
 import TaskCard from './TaskCard';
 
-// ════════════════════════════════════════════════════════════
-// TaskColumn — READ ONLY for this workshop
-//
-// This component renders one column of the Kanban board.
-// It receives an array of tasks and maps over them to render TaskCards.
-//
-// Things to notice as you read:
-//   - Props: id, label, color, tasks, onAddTask, onEditTask, onDeleteTask
-//   - tasks.map() — rendering a list of components from an array
-//   - {tasks.length === 0 && ...} — conditional empty state
-//   - useDroppable hook — makes this column a drop target
-//
-// You do NOT write anything here today.
-// ════════════════════════════════════════════════════════════
+const emptyHint = {
+  priority: 'Nothing urgent. Enjoy it.',
+  upcoming: 'Add what is coming next.',
+  in_progress: 'Drag a task here when you start it.',
+  completed: 'Finished tasks land here.',
+};
 
-const TaskColumn = ({ id, label, color, tasks, onAddTask, onEditTask, onDeleteTask }) => {
+/** One column of the board, and a drop target for dragged cards. */
+const TaskColumn = ({ id, label, color, tasks, filtered, onAddTask, onEditTask, onDeleteTask, onFocusTask }) => {
   const { setNodeRef, isOver } = useDroppable({ id });
 
-  const container = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
-  };
-
   return (
-    <div
+    <section
       ref={setNodeRef}
-      className={`p-4 min-h-[800px] transition-all ${
-        isOver ? 'ring-4 ring-completed ring-opacity-50 scale-105 rounded-xl' : ''
-      }`}
+      aria-labelledby={`column-${id}`}
+      className={`flex flex-col rounded-2xl p-3 transition-colors ${isOver ? 'bg-white/70 ring-2 ring-completed' : 'bg-white/35'}`}
     >
-      {/* Column Header */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${color}`} />
-            <h3 className="font-bold text-gunmetal text-lg">{label}</h3>
-            <span className="text-sm text-smoke bg-gray-200 px-2 py-1 rounded-full">
-              {tasks.length}
-            </span>
-          </div>
-        </div>
-
-        {/* Add Task Button */}
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+      <header className="flex items-center gap-2 px-1 mb-3">
+        <span className={`w-2.5 h-2.5 rounded-full ${color}`} aria-hidden="true" />
+        <h3 id={`column-${id}`} className="font-bold text-gunmetal">{label}</h3>
+        <span className="text-xs font-semibold text-gunmetal bg-white/80 px-2 py-0.5 rounded-full tabular-nums" aria-label={`${tasks.length} tasks`}>{tasks.length}</span>
+        <button
+          type="button"
           onClick={onAddTask}
-          className="w-full py-2 border-2 border-dashed border-smoke rounded-lg text-smoke hover:border-completed hover:text-completed transition-colors flex items-center justify-center gap-2 font-medium"
+          aria-label={`Add a task to ${label}`}
+          className="ml-auto grid place-items-center w-8 h-8 rounded-lg text-gunmetal hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-completed transition-colors"
         >
-          <FaPlus />
-          <span>Add Task</span>
-        </motion.button>
+          <FaPlus size={12} aria-hidden="true" />
+        </button>
+      </header>
+
+      <div className="flex flex-col gap-2.5 min-h-[120px]">
+        <AnimatePresence initial={false}>
+          {tasks.map((task) => (
+            <motion.div key={task.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.18 }}>
+              <TaskCard task={task} onEdit={onEditTask} onDelete={onDeleteTask} onFocus={onFocusTask} />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+
+        {tasks.length === 0 && (
+          <button
+            type="button"
+            onClick={onAddTask}
+            className="flex-1 grid place-items-center rounded-xl border-2 border-dashed border-smoke/40 text-sm text-smoke px-3 py-8 hover:border-completed hover:text-completed transition-colors"
+          >
+            {filtered ? 'No matching tasks.' : emptyHint[id]}
+          </button>
+        )}
       </div>
-
-      {/* Tasks List */}
-      <motion.div
-        variants={container}
-        initial="hidden"
-        animate="show"
-        className="space-y-3"
-      >
-        {tasks.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            onEdit={() => onEditTask(task)}
-            onDelete={() => onDeleteTask(task.id)}
-          />
-        ))}
-      </motion.div>
-
-      {/* Empty State */}
-      {tasks.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="flex flex-col items-center justify-center py-12 text-center"
-        >
-          <div className="text-6xl mb-4">📋</div>
-          <p className="text-smoke text-sm">No tasks yet</p>
-        </motion.div>
-      )}
-    </div>
+    </section>
   );
 };
 

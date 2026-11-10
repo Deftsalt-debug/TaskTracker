@@ -1,47 +1,33 @@
 import axios from 'axios';
+import { getToken, signOut } from '../auth';
 
-// Automatically detect the correct base URL
-// If accessing from network (not localhost), use the network IP
-const getBaseURL = () => {
-  const hostname = window.location.hostname;
-  
-  // If accessing via network IP (like 172.20.10.2), use that IP for backend
-  // Node.js backend runs on port 8080 (same as before)
-  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    return `http://${hostname}:8080/api`;
-  }
-  
-  // Default to localhost for local development
-  return 'http://localhost:8080/api';
-};
-
+// Same-origin: Vite proxies /api to the backend in development, and the
+// backend serves the built app in production.
 const axiosInstance = axios.create({
-  baseURL: getBaseURL(),
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  baseURL: '/api',
+  headers: { 'Content-Type': 'application/json' },
 });
 
-// Add request interceptor to include token if stored
 axiosInstance.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  const token = getToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Add response interceptor for error handling
+// An expired or rejected session signs the user out; App then shows the login page.
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
-    }
+    const onAuthRoute = error.config?.url?.startsWith('/auth/');
+    if (error.response?.status === 401 && !onAuthRoute) signOut();
     return Promise.reject(error);
-  }
+  },
 );
+
+/** The server's own explanation of a failed request, or a fallback. */
+export function errorMessage(error, fallback = 'Something went wrong. Please try again.') {
+  if (!error.response) return 'Cannot reach the server. Is the backend running?';
+  return error.response.data?.message || fallback;
+}
 
 export default axiosInstance;

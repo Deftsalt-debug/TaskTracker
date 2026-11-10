@@ -1,262 +1,121 @@
 import React, { useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
-import { motion, AnimatePresence } from 'framer-motion';
-import { FaEdit, FaTrash, FaClock, FaFire } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaRegCalendarAlt, FaPlay, FaCheck, FaGripVertical } from 'react-icons/fa';
+import { describeDue } from '../../lib/dates';
 
-// ════════════════════════════════════════════════════════════
-// TaskCard — READ ONLY for this workshop
-//
-// This component receives one task object as a prop
-// and displays it as a card.
-//
-// Things to notice as you read:
-//   - Props: task, onEdit, onDelete, isDragging
-//   - useState for the delete confirmation toggle
-//   - Conditional rendering: {!isCompleted && (...)}
-//   - How task.title, task.description etc. are accessed from props
-//   - The useDraggable hook (from DnD Kit) — makes the card draggable
-//
-// You do NOT write anything here today.
-// ════════════════════════════════════════════════════════════
+const accent = {
+  priority: 'border-l-priority',
+  upcoming: 'border-l-upcoming',
+  in_progress: 'border-l-inProgress',
+  completed: 'border-l-completed',
+};
 
-const TaskCard = ({ task, onEdit, onDelete, isDragging }) => {
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+const priorityPill = {
+  high: 'bg-red-50 text-red-700 ring-red-200',
+  medium: 'bg-amber-50 text-amber-800 ring-amber-200',
+  low: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+};
 
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
-    id: task.id,
-    disabled: isDragging
-  });
+const dueTone = {
+  overdue: 'text-red-700 font-semibold',
+  soon: 'text-amber-800 font-semibold',
+  later: 'text-smoke',
+};
 
-  const style = transform ? {
-    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-  } : undefined;
+const iconButton = 'grid place-items-center w-8 h-8 rounded-md text-smoke hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-completed transition-colors';
 
-  const priorityColors = {
-    low: 'text-green-600',
-    medium: 'text-yellow-600',
-    high: 'text-red-600'
-  };
+/**
+ * One task on the board. The grip (and the card body) drags it between
+ * columns; with the keyboard, focus the grip, press Space, move with the arrow
+ * keys and press Space again to drop.
+ */
+const TaskCard = ({ task, onEdit, onDelete, onFocus, overlay = false }) => {
+  const [confirming, setConfirming] = useState(false);
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({ id: task.id, disabled: overlay });
 
-  const categoryColors = {
-    upcoming: 'bg-upcoming',
-    in_progress: 'bg-inProgress',
-    priority: 'bg-priority',
-    completed: 'bg-completed'
-  };
+  const done = task.category === 'completed';
+  const due = done ? null : describeDue(task.due_date);
+  const estimated = task.estimated_pomodoros || 0;
+  const completed = task.completed_pomodoros || 0;
+  const percent = estimated > 0 ? Math.min(100, Math.round((completed / estimated) * 100)) : 0;
 
-  const categoryBgOpacity = {
-    upcoming: 'bg-upcoming bg-opacity-100',
-    in_progress: 'bg-inProgress bg-opacity-100',
-    priority: 'bg-priority bg-opacity-80',
-    completed: 'bg-completed bg-opacity-100'
-  };
-
-  // Text colors for each category based on the new optimized palette
-  const categoryTextColors = {
-    priority: {
-      title: '#1D1B19', // dark brownish-gray for title
-      secondary: '#3E3B39' // lighter brownish-gray for secondary text
-    },
-    upcoming: {
-      title: '#1F2720', // dark charcoal green for title (keep same)
-      secondary: '#38433A' // slightly lighter for secondary text (keep same)
-    },
-    in_progress: {
-      title: '#1F261E', // dark fern green for title
-      secondary: '#2E342A' // lighter fern green for secondary
-    },
-    completed: {
-      title: '#ffffffff', // off-white for title
-      secondary: '#E0E4DA' // lighter beige for secondary
-    }
-  };
-
-  const item = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0 }
-  };
-
-  // Compact view for completed tasks
-  const isCompleted = task.category === 'completed';
-
-  const CardContent = (
-    <motion.div
-      variants={item}
-      whileHover={{ scale: 1.03, y: -5 }}
-      className={`rounded-lg ${isCompleted ? 'p-2.5' : 'p-3'} shadow-md hover:shadow-xl transition-all cursor-move ${categoryBgOpacity[task.category] || 'bg-gray-100'} ${
-        isDragging ? 'opacity-50' : ''
-      }`}
+  return (
+    <article
       ref={setNodeRef}
-      style={style}
       {...listeners}
-      {...attributes}
+      className={`group relative bg-white rounded-xl border border-gray-200 border-l-4 ${accent[task.category] || 'border-l-smoke'} p-3.5 shadow-sm transition-shadow touch-manipulation ${
+        overlay ? 'shadow-2xl rotate-2 cursor-grabbing' : 'hover:shadow-md cursor-grab'
+      } ${isDragging ? 'opacity-40' : ''}`}
     >
-      {/* Title - Color based on category */}
-      <p 
-        className="font-bold text-base sm:text-lg mb-1.5 line-clamp-2"
-        style={{ color: categoryTextColors[task.category]?.title || '#000000' }}
-      >
-        {task.title}
-      </p>
+      <div className="flex items-start gap-2">
+        <h4 className={`flex-1 min-w-0 text-[15px] font-semibold leading-snug break-words ${done ? 'text-smoke line-through decoration-smoke/50' : 'text-gunmetal'}`}>
+          {task.title}
+        </h4>
+        {!overlay && (
+          <button
+            ref={setActivatorNodeRef}
+            {...attributes}
+            type="button"
+            aria-label={`Move “${task.title}” to another column`}
+            className={`${iconButton} -mr-1.5 -mt-1 cursor-grab opacity-40 group-hover:opacity-100 focus-visible:opacity-100`}
+          >
+            <FaGripVertical size={12} aria-hidden="true" />
+          </button>
+        )}
+      </div>
 
-      {/* Show details only for non-completed tasks */}
-      {!isCompleted && (
-        <>
-          {/* Priority Badge */}
-          {task.priority_level && task.priority_level !== 'medium' && (
-            <div className="flex items-center gap-1 mb-1.5">
-              <FaFire className={`text-xs ${priorityColors[task.priority_level]}`} />
-              <span className={`text-xs font-semibold uppercase ${priorityColors[task.priority_level]}`}>
-                {task.priority_level}
-              </span>
-            </div>
-          )}
+      {!done && task.description && <p className="mt-1.5 text-sm text-smoke line-clamp-2">{task.description}</p>}
 
-          {/* Description */}
-          {task.description && (
-            <p 
-              className="text-xs mb-2 line-clamp-2"
-              style={{ color: categoryTextColors[task.category]?.secondary || '#4B5563' }}
-            >
-              {task.description}
-            </p>
+      {!done && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+          <span className={`px-2 py-0.5 rounded-full ring-1 ring-inset font-semibold capitalize ${priorityPill[task.priority_level] || priorityPill.medium}`}>
+            {task.priority_level || 'medium'}
+          </span>
+          {due && (
+            <span className={`inline-flex items-center gap-1 ${dueTone[due.tone]}`}>
+              <FaRegCalendarAlt size={11} aria-hidden="true" />{due.label}
+            </span>
           )}
-
-          {/* Due Date */}
-          {task.due_date && (
-            <div 
-              className="flex items-center gap-1.5 text-xs mb-2"
-              style={{ color: categoryTextColors[task.category]?.secondary || '#4B5563' }}
-            >
-              <FaClock size={10} />
-              <span>{new Date(task.due_date).toLocaleDateString()}</span>
-            </div>
-          )}
-
-          {/* Pomodoro Progress */}
-          {task.estimated_pomodoros > 0 && (
-            <div className="mb-2">
-              <div 
-                className="flex items-center justify-between text-xs mb-1"
-                style={{ color: categoryTextColors[task.category]?.secondary || '#4B5563' }}
-              >
-                <span className="font-medium">🍅 Pomodoros</span>
-                <span className="font-semibold">{task.completed_pomodoros || 0} / {task.estimated_pomodoros}</span>
-              </div>
-              <div className="w-full bg-gray-300 rounded-full h-1.5">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${((task.completed_pomodoros || 0) / task.estimated_pomodoros) * 100}%` }}
-                  transition={{ duration: 0.5, ease: 'easeOut' }}
-                  className="bg-green-600 h-1.5 rounded-full"
-                />
-              </div>
-              {/* Time Spent */}
-              {task.completed_pomodoros > 0 && (
-                <div 
-                  className="text-xs mt-1 font-medium"
-                  style={{ color: categoryTextColors[task.category]?.secondary || '#4B5563' }}
-                >
-                  ⏱️ Time spent: {(task.completed_pomodoros * 25)} min
-                </div>
-              )}
-            </div>
-          )}
-        </>
+        </div>
       )}
 
-      {/* Actions */}
-      <AnimatePresence mode="wait">
-        {!showDeleteConfirm ? (
-          <motion.div 
-            key="actions"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className={`flex items-center gap-2 ${!isCompleted ? 'pt-2 border-t border-gray-300' : ''}`}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                onEdit && onEdit(task);
-              }}
-              className="p-1.5 hover:text-blue-600 hover:bg-white hover:bg-opacity-50 rounded transition-colors"
-              style={{ color: categoryTextColors[task.category]?.secondary }}
-              type="button"
-            >
-              <FaEdit size={12} />
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                setShowDeleteConfirm(true);
-              }}
-              className="p-1.5 hover:text-red-600 hover:bg-white hover:bg-opacity-50 rounded transition-colors"
-              style={{ color: categoryTextColors[task.category]?.secondary }}
-              type="button"
-            >
-              <FaTrash size={12} />
-            </motion.button>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="confirm"
-            initial={{ opacity: 0, y: -5 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -5 }}
-            transition={{ duration: 0.2 }}
-            className={`flex flex-col gap-2 ${!isCompleted ? 'pt-2 border-t border-gray-300' : ''}`}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-xs font-semibold text-red-600">Delete this task?</p>
-            <div className="flex gap-2">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  setShowDeleteConfirm(false);
-                }}
-                className="flex-1 px-3 py-1.5 bg-gray-200 text-gray-700 rounded text-xs font-semibold hover:bg-gray-300 transition-colors"
-                type="button"
-              >
-                No
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  onDelete && onDelete(task.id);
-                }}
-                className="flex-1 px-3 py-1.5 bg-red-600 text-white rounded text-xs font-semibold hover:bg-red-700 transition-colors"
-                type="button"
-              >
-                Yes
-              </motion.button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
+      {!done && estimated > 0 && (
+        <div className="mt-3">
+          <div className="flex items-center justify-between text-xs text-smoke mb-1">
+            <span>Focus sessions</span>
+            <span className="font-semibold text-gunmetal tabular-nums">{completed} / {estimated}</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={estimated} aria-valuenow={Math.min(completed, estimated)} aria-label="Focus sessions completed">
+            <div className="h-full rounded-full bg-inProgress transition-[width] duration-500" style={{ width: `${percent}%` }} />
+          </div>
+        </div>
+      )}
 
-  return isDragging ? (
-    <div className="opacity-50">{CardContent}</div>
-  ) : (
-    CardContent
+      {!overlay && (
+        // Stop pointer events here so pressing a button never starts a drag.
+        <div className="mt-3 flex items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
+          {confirming ? (
+            <div className="flex items-center gap-2 w-full" role="group" aria-label="Confirm delete">
+              <span className="text-xs font-semibold text-red-700 flex-1">Delete this task?</span>
+              <button type="button" autoFocus onClick={() => setConfirming(false)} className="px-3 py-1.5 rounded-md bg-gray-100 text-gunmetal text-xs font-semibold hover:bg-gray-200">Keep</button>
+              <button type="button" onClick={() => onDelete(task.id)} className="px-3 py-1.5 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700">Delete</button>
+            </div>
+          ) : (
+            <>
+              {done ? (
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-completed mr-auto"><FaCheck size={10} aria-hidden="true" />Done</span>
+              ) : (
+                <button type="button" onClick={() => onFocus(task)} className="inline-flex items-center gap-1.5 mr-auto px-2.5 py-1.5 rounded-md text-xs font-semibold text-completed hover:bg-completed hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-completed transition-colors">
+                  <FaPlay size={9} aria-hidden="true" />Focus
+                </button>
+              )}
+              <button type="button" onClick={() => onEdit(task)} aria-label={`Edit “${task.title}”`} className={`${iconButton} hover:text-gunmetal`}><FaEdit size={13} aria-hidden="true" /></button>
+              <button type="button" onClick={() => setConfirming(true)} aria-label={`Delete “${task.title}”`} className={`${iconButton} hover:text-red-700`}><FaTrash size={12} aria-hidden="true" /></button>
+            </>
+          )}
+        </div>
+      )}
+    </article>
   );
 };
 

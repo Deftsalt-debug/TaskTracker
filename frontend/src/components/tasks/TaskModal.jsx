@@ -2,23 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaTimes, FaSpinner } from 'react-icons/fa';
 import toast from 'react-hot-toast';
-import axiosInstance from '../../api/axiosInstance';
+import axiosInstance, { errorMessage } from '../../api/axiosInstance';
 
-// ════════════════════════════════════════════════════════════
-// TaskModal — READ ONLY for this workshop
-//
-// This is the form for creating and editing tasks.
-// It is a great example of "controlled inputs" in React.
-//
-// Things to notice as you read:
-//   - formData state — every input's value lives in state
-//   - handleChange — one function updates any field using e.target.name
-//   - useEffect — pre-fills the form when editing an existing task
-//   - handleSubmit — POST (create) vs PUT (update) based on task.id
-//
-// You do NOT write anything here today.
-// ════════════════════════════════════════════════════════════
-
+/** The create / edit form. Every input is controlled by `formData`. */
 const TaskModal = ({ task, onClose, onSave }) => {
   const [formData, setFormData] = useState({
     title: '',
@@ -43,6 +29,13 @@ const TaskModal = ({ task, onClose, onSave }) => {
     }
   }, [task]);
 
+  // Escape closes the form, as a dialog should.
+  useEffect(() => {
+    const onKey = (event) => event.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -55,52 +48,15 @@ const TaskModal = ({ task, onClose, onSave }) => {
       return;
     }
 
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    if (!user.id) {
-      toast.error('User not found');
-      return;
-    }
-
     setLoading(true);
     try {
-      const payload = { ...formData, user_id: user.id };
-      
-      if (task && task.id) {
-        // Update existing task
-        const response = await axiosInstance.put(`/tasks/${task.id}`, payload);
-        if (response.data.status === 'success') {
-          const updatedTask = { 
-            ...task, 
-            ...formData, 
-            id: task.id, 
-            user_id: user.id, 
-            completed_pomodoros: task.completed_pomodoros || 0 
-          };
-          console.log('Task updated:', updatedTask);
-          onSave(updatedTask);
-        } else {
-          throw new Error(response.data.message || 'Update failed');
-        }
-      } else {
-        // Create new task
-        const response = await axiosInstance.post('/tasks', payload);
-        if (response.data.status === 'success') {
-          const newTask = { 
-            ...formData, 
-            id: parseInt(response.data.data.id), // Ensure ID is a number
-            user_id: user.id,
-            completed_pomodoros: 0,
-            created_at: new Date().toISOString()
-          };
-          console.log('Task created:', newTask);
-          onSave(newTask);
-        } else {
-          throw new Error(response.data.message || 'Creation failed');
-        }
-      }
+      // The server returns the saved task, so the board shows exactly what was stored.
+      const response = task && task.id
+        ? await axiosInstance.put(`/tasks/${task.id}`, formData)
+        : await axiosInstance.post('/tasks', formData);
+      onSave(response.data.data);
     } catch (error) {
-      console.error('Save task error:', error);
-      toast.error(error.message || 'Failed to save task');
+      toast.error(errorMessage(error, 'Failed to save task'));
     } finally {
       setLoading(false);
     }
@@ -119,16 +75,21 @@ const TaskModal = ({ task, onClose, onSave }) => {
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="task-modal-title"
         className="bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-2xl my-4 sm:my-8"
       >
         {/* Header */}
         <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200">
-          <h2 className="text-lg sm:text-xl font-bold text-gunmetal">
-            {task && task.id ? 'Edit Task' : 'Create New Task'}
+          <h2 id="task-modal-title" className="text-lg sm:text-xl font-bold text-gunmetal">
+            {task && task.id ? 'Edit task' : 'New task'}
           </h2>
           <button
+            type="button"
             onClick={onClose}
-            className="text-smoke hover:text-gunmetal transition-colors"
+            aria-label="Close"
+            className="grid place-items-center w-9 h-9 rounded-lg text-smoke hover:text-gunmetal hover:bg-gray-100 transition-colors"
           >
             <FaTimes size={18} />
           </button>
@@ -138,27 +99,29 @@ const TaskModal = ({ task, onClose, onSave }) => {
         <form onSubmit={handleSubmit} className="p-3 sm:p-4 space-y-3">
           {/* Title */}
           <div>
-            <label className="block text-xs font-medium text-gunmetal mb-1">
+            <label htmlFor="task-title" className="block text-xs font-medium text-gunmetal mb-1">
               Task Title *
             </label>
             <input
               type="text"
-              name="title"
+              id="task-title" name="title"
               value={formData.title}
               onChange={handleChange}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-completed focus:border-transparent"
-              placeholder="Enter task title"
+              placeholder="What needs doing?"
+              maxLength={200}
+              autoFocus
               required
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-xs font-medium text-gunmetal mb-1">
+            <label htmlFor="task-description" className="block text-xs font-medium text-gunmetal mb-1">
               Description
             </label>
             <textarea
-              name="description"
+              id="task-description" name="description"
               value={formData.description}
               onChange={handleChange}
               rows={2}
@@ -170,11 +133,11 @@ const TaskModal = ({ task, onClose, onSave }) => {
           {/* Row 1: Category and Priority */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gunmetal mb-1">
+              <label htmlFor="task-category" className="block text-xs font-medium text-gunmetal mb-1">
                 Category
               </label>
               <select
-                name="category"
+                id="task-category" name="category"
                 value={formData.category}
                 onChange={handleChange}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-completed focus:border-transparent"
@@ -187,11 +150,11 @@ const TaskModal = ({ task, onClose, onSave }) => {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gunmetal mb-1">
+              <label htmlFor="task-priority_level" className="block text-xs font-medium text-gunmetal mb-1">
                 Priority
               </label>
               <select
-                name="priority_level"
+                id="task-priority_level" name="priority_level"
                 value={formData.priority_level}
                 onChange={handleChange}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-completed focus:border-transparent"
@@ -206,12 +169,12 @@ const TaskModal = ({ task, onClose, onSave }) => {
           {/* Row 2: Due Date and Pomodoros */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gunmetal mb-1">
+              <label htmlFor="task-due_date" className="block text-xs font-medium text-gunmetal mb-1">
                 Due Date
               </label>
               <input
                 type="date"
-                name="due_date"
+                id="task-due_date" name="due_date"
                 value={formData.due_date}
                 onChange={handleChange}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-completed focus:border-transparent"
@@ -219,12 +182,12 @@ const TaskModal = ({ task, onClose, onSave }) => {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gunmetal mb-1">
+              <label htmlFor="task-estimated_pomodoros" className="block text-xs font-medium text-gunmetal mb-1">
                 Estimated Pomodoros
               </label>
               <input
                 type="number"
-                name="estimated_pomodoros"
+                id="task-estimated_pomodoros" name="estimated_pomodoros"
                 value={formData.estimated_pomodoros}
                 onChange={handleChange}
                 min="1"

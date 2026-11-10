@@ -24,21 +24,14 @@ const HistoryPage = () => {
     try {
       setLoading(true);
       
-      // Get user from localStorage
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      if (!user.id) {
-        toast.error('User not found. Please login again.');
-        return;
-      }
-      
       // Fetch Pomodoro History
-      const pomodoroResponse = await axiosInstance.get(`/pomodoro?user_id=${user.id}`);
+      const pomodoroResponse = await axiosInstance.get('/pomodoro');
       if (pomodoroResponse.data.status === 'success') {
         setPomodoroHistory(pomodoroResponse.data.data || []);
       }
 
       // Fetch All Tasks and Filter for Completed Ones
-      const tasksResponse = await axiosInstance.get(`/tasks?user_id=${user.id}`);
+      const tasksResponse = await axiosInstance.get('/tasks');
       if (tasksResponse.data.status === 'success') {
         const completedTasks = tasksResponse.data.data.filter(t => t.is_completed);
         setTaskHistory(completedTasks || []);

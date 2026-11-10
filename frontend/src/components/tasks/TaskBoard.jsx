@@ -1,189 +1,182 @@
-import React, { useState } from 'react';
-import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCorners, useSensor, useSensors } from '@dnd-kit/core';
+import { AnimatePresence } from 'framer-motion';
+import { FaPlus, FaSearch, FaTimes } from 'react-icons/fa';
 import toast from 'react-hot-toast';
-import axiosInstance from '../../api/axiosInstance';
+import axiosInstance, { errorMessage } from '../../api/axiosInstance';
+import { useTimer } from '../../timer/TimerContext';
 import TaskColumn from './TaskColumn';
 import TaskCard from './TaskCard';
 import TaskModal from './TaskModal';
 
-// ════════════════════════════════════════════════════════════
-// TaskBoard — MOSTLY PRE-WRITTEN for this workshop
-//
-// This component handles:
-//   - Drag and drop between columns (DnD Kit)
-//   - Opening the modal for creating/editing tasks
-//   - Calling the delete API
-//
-// You only need to complete ONE TODO in this file (handleDeleteTask).
-// Everything else is pre-written — read it, don't touch it.
-//
-// Concepts to notice as you read:
-//   - Multiple useState hooks in one component
-//   - How props (onTaskCreated, onTaskUpdated etc.) flow
-//     from TasksPage down into this component
-//   - How tasks are split into columns using .filter()
-// ════════════════════════════════════════════════════════════
+const categories = [
+  { id: 'priority', label: 'Priority', color: 'bg-priority' },
+  { id: 'upcoming', label: 'Upcoming', color: 'bg-upcoming' },
+  { id: 'in_progress', label: 'In Progress', color: 'bg-inProgress' },
+  { id: 'completed', label: 'Completed', color: 'bg-completed' },
+];
+const labelOf = (id) => categories.find((c) => c.id === id)?.label ?? id;
 
-const TaskBoard = ({ tasks, onTaskCreated, onTaskUpdated, onTaskDeleted, onTaskMoved }) => {
+// Arrow keys move a picked-up card one column left or right.
+const columnKeyboardCoordinates = (event, { currentCoordinates }) => {
+  const step = Math.max(240, window.innerWidth / 5);
+  if (event.code === 'ArrowRight') return { ...currentCoordinates, x: currentCoordinates.x + step };
+  if (event.code === 'ArrowLeft') return { ...currentCoordinates, x: currentCoordinates.x - step };
+  return undefined;
+};
+
+/** The four-column board: search, drag and drop between columns, and the create / edit modal. */
+const TaskBoard = ({ tasks, onTaskCreated, onTaskUpdated, onTaskDeleted }) => {
+  const navigate = useNavigate();
+  const { selectTask } = useTimer();
   const [activeId, setActiveId] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState(null);
+  const [editingTask, setEditingTask] = useState(null); // a task, or { category } for a new one
+  const [query, setQuery] = useState('');
+  const searchRef = useRef(null);
 
-  const categories = [
-    { id: 'priority', label: 'Priority', color: 'bg-priority' },
-    { id: 'upcoming', label: 'Upcoming', color: 'bg-upcoming' },
-    { id: 'in_progress', label: 'In Progress', color: 'bg-inProgress' },
-    { id: 'completed', label: 'Completed', color: 'bg-completed' }
-  ];
+  const sensors = useSensors(
+    // A small movement threshold lets a plain click through to the card's buttons.
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: columnKeyboardCoordinates }),
+  );
 
-  const getTasksByCategory = (category) => {
-    return tasks.filter(task => task.category === category);
-  };
-
-  const handleDragStart = (event) => {
-    setActiveId(event.active.id);
-  };
-
-  const handleDragEnd = async (event) => {
-    const { active, over } = event;
-
-    if (!over) {
-      setActiveId(null);
-      return;
-    }
-
-    const taskId = parseInt(active.id);
-    const newCategory = over.id;
-
-    const task = tasks.find(t => t.id === taskId);
-    if (task && task.category !== newCategory) {
-      // Optimistically update UI
-      onTaskMoved(taskId, newCategory);
-
-      // Update on server
-      try {
-        await axiosInstance.put(`/tasks/${taskId}`, {
-          category: newCategory
-        });
-        toast.success('Task moved successfully!');
-      } catch (error) {
-        // Revert on error
-        onTaskMoved(taskId, task.category);
-        toast.error('Failed to move task');
+  // "/" focuses search and "n" starts a new task, unless you are typing somewhere.
+  useEffect(() => {
+    const onKey = (event) => {
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName) || event.target.isContentEditable;
+      if (typing || event.metaKey || event.ctrlKey || event.altKey || editingTask) return;
+      if (event.key === '/') {
+        event.preventDefault();
+        searchRef.current?.focus();
+      } else if (event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        setEditingTask({ category: 'upcoming' });
       }
-    }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editingTask]);
 
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return tasks;
+    return tasks.filter((t) => `${t.title} ${t.description || ''}`.toLowerCase().includes(needle));
+  }, [tasks, query]);
+
+  const handleDragEnd = async ({ active, over }) => {
     setActiveId(null);
-  };
+    if (!over) return;
+    const task = tasks.find((t) => t.id === active.id);
+    const newCategory = over.id;
+    if (!task || task.category === newCategory) return;
 
-  const handleAddTask = (category) => {
-    setEditingTask({ category });
-    setModalOpen(true);
-  };
-
-  const handleEditTask = (task) => {
-    setEditingTask(task);
-    setModalOpen(true);
+    // Move the card at once, then confirm with the server; put it back if that fails.
+    onTaskUpdated({ ...task, category: newCategory });
+    try {
+      const response = await axiosInstance.put(`/tasks/${task.id}`, { category: newCategory });
+      onTaskUpdated(response.data.data);
+    } catch (error) {
+      onTaskUpdated(task);
+      toast.error(errorMessage(error, 'Failed to move task'));
+    }
   };
 
   const handleDeleteTask = async (taskId) => {
     try {
-      // TODO TB1: Make a DELETE request to the API for this task
-      // Then call onTaskDeleted(taskId) to remove it from the UI
-      // Hint: await axiosInstance.delete(`/tasks/${taskId}`);
-      //       onTaskDeleted(taskId);
       await axiosInstance.delete(`/tasks/${taskId}`);
       onTaskDeleted(taskId);
     } catch (error) {
-      toast.error('Failed to delete task');
+      toast.error(errorMessage(error, 'Failed to delete task'));
     }
   };
 
-  const activeTask = tasks.find(t => t.id === activeId);
-
-  // Calculate the height of the tallest column (including header)
-  const getColumnHeight = (categoryId) => {
-    const categoryTasks = getTasksByCategory(categoryId);
-    const baseHeight = 200;
-    const taskHeight = categoryTasks.length * 190;
-    return baseHeight + taskHeight;
+  const handleFocusTask = (task) => {
+    selectTask(task.id);
+    navigate('/focus');
   };
 
-  const maxHeight = Math.max(...categories.map(cat => getColumnHeight(cat.id)));
+  const activeTask = tasks.find((t) => t.id === activeId);
 
   return (
     <>
-      <DndContext
-        collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 pb-8 relative">
-          {categories.map((category, index) => (
-            <React.Fragment key={category.id}>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1, duration: 0.5 }}
-                className="relative"
-              >
-                <TaskColumn
-                  id={category.id}
-                  label={category.label}
-                  color={category.color}
-                  tasks={getTasksByCategory(category.id)}
-                  onAddTask={() => handleAddTask(category.id)}
-                  onEditTask={handleEditTask}
-                  onDeleteTask={handleDeleteTask}
-                />
-              </motion.div>
+      <div className="flex flex-wrap items-center gap-3 pt-1 pb-4">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-smoke" size={13} aria-hidden="true" />
+          <input
+            ref={searchRef}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); e.currentTarget.blur(); } }}
+            placeholder="Search tasks"
+            aria-label="Search tasks"
+            className="w-full pl-10 pr-16 py-2.5 rounded-xl bg-white/80 border border-white text-gunmetal placeholder:text-smoke focus:outline-none focus:ring-2 focus:ring-completed [&::-webkit-search-cancel-button]:hidden"
+          />
+          {query ? (
+            <button type="button" onClick={() => { setQuery(''); searchRef.current?.focus(); }} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 grid place-items-center w-7 h-7 rounded-md text-smoke hover:bg-gray-100"><FaTimes size={12} aria-hidden="true" /></button>
+          ) : (
+            <kbd className="hidden sm:block absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border border-gray-300 text-[11px] text-smoke font-sans" aria-hidden="true">/</kbd>
+          )}
+        </div>
+        {query.trim() && <p className="text-sm text-gunmetal" role="status">{visible.length} of {tasks.length} tasks</p>}
+        <button
+          type="button"
+          onClick={() => setEditingTask({ category: 'upcoming' })}
+          className="ml-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-completed text-white font-semibold shadow-sm hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-completed transition-colors"
+        >
+          <FaPlus size={12} aria-hidden="true" />New task
+          <kbd className="hidden sm:inline px-1.5 rounded bg-white/20 text-[11px] font-sans" aria-hidden="true">N</kbd>
+        </button>
+      </div>
 
-              {/* Border line between columns */}
-              {index < categories.length - 1 && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: maxHeight > 100 ? 1 : 0 }}
-                  transition={{ duration: 0.5 }}
-                  className="absolute hidden lg:block"
-                  style={{
-                    left: `${((index + 1) / categories.length) * 100}%`,
-                    top: 0,
-                    width: '1px',
-                    height: `${maxHeight}px`,
-                    background: `linear-gradient(to bottom, rgba(125, 138, 150, 0.3) 0%, rgba(125, 138, 150, 0.2) 60%, rgba(125, 138, 150, 0) 100%)`,
-                    transition: 'height 0.3s ease-in-out'
-                  }}
-                />
-              )}
-            </React.Fragment>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={({ active }) => setActiveId(active.id)}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveId(null)}
+        accessibility={{
+          announcements: {
+            onDragStart: ({ active }) => `Picked up ${tasks.find((t) => t.id === active.id)?.title}.`,
+            onDragOver: ({ over }) => (over ? `Over ${labelOf(over.id)}.` : ''),
+            onDragEnd: ({ over }) => (over ? `Dropped in ${labelOf(over.id)}.` : 'Drop cancelled.'),
+            onDragCancel: () => 'Move cancelled.',
+          },
+        }}
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 pb-8 items-start">
+          {categories.map((category) => (
+            <TaskColumn
+              key={category.id}
+              id={category.id}
+              label={category.label}
+              color={category.color}
+              tasks={visible.filter((task) => task.category === category.id)}
+              filtered={Boolean(query.trim())}
+              onAddTask={() => setEditingTask({ category: category.id })}
+              onEditTask={setEditingTask}
+              onDeleteTask={handleDeleteTask}
+              onFocusTask={handleFocusTask}
+            />
           ))}
         </div>
 
-        <DragOverlay>
-          {activeTask ? (
-            <div className="transform rotate-3 scale-105">
-              <TaskCard task={activeTask} isDragging />
-            </div>
-          ) : null}
-        </DragOverlay>
+        <DragOverlay>{activeTask ? <TaskCard task={activeTask} overlay /> : null}</DragOverlay>
       </DndContext>
 
       <AnimatePresence>
-        {modalOpen && (
+        {editingTask && (
           <TaskModal
             task={editingTask}
-            onClose={() => {
-              setModalOpen(false);
-              setEditingTask(null);
-            }}
+            onClose={() => setEditingTask(null)}
             onSave={(savedTask) => {
-              if (editingTask && editingTask.id) {
+              if (editingTask.id) {
                 onTaskUpdated(savedTask);
+                toast.success('Task updated');
               } else {
                 onTaskCreated(savedTask);
               }
-              setModalOpen(false);
               setEditingTask(null);
             }}
           />

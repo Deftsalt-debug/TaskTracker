@@ -35,9 +35,8 @@ coverage/
 temp/
 tmp/
 
-# Lock files (optional - some prefer to keep these)
-package-lock.json
-yarn.lock
+# Local database
+backend/data/
 
 # OS files
 Thumbs.db
