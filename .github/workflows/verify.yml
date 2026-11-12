@@ -2,7 +2,6 @@ name: Verify
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 permissions:
@@ -18,3 +17,5 @@ jobs:
           node-version: 22
       - run: npm run setup
       - run: npm run verify
+      # Lint and static type-check tooling are not configured.
+      # Adding development dependencies remains a separate maintainer decision.

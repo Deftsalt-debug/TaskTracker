@@ -42,3 +42,17 @@ backend/data/
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# All local environment variants; examples may be committed
+.env*
+!.env.example
+
+# Backend rules consolidated from backend/.gitignore
+backend/dist/
+backend/build/
+*.db
+logs/
+
+# Remaining editor and OS files
+*.suo
+*.ntvs*
